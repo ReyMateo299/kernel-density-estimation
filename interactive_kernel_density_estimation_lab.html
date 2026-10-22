@@ -1,0 +1,1791 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Density Estimation (KDE) — Probabilistic ML Interactive Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-serif: 'Newsreader', Georgia, serif;
+        }
+        body {
+            font-family: var(--font-sans);
+            background-color: #090d16;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .math-serif {
+            font-family: var(--font-serif);
+        }
+        .mono-num {
+            font-family: var(--font-mono);
+            font-variant-numeric: tabular-nums;
+        }
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 999px;
+            background: #1e293b;
+            border: 1px solid #334155;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #38bdf8;
+            border: 2px solid #0f172a;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            margin-top: -7px;
+            cursor: pointer;
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background: #7dd3fc;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+        }
+        .pulse-highlight {
+            animation: pulseRing 2s infinite;
+        }
+        @keyframes pulseRing {
+            0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.6); }
+            70% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+        }
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            font-size: 0.88em;
+            line-height: 1.1;
+            margin: 0 0.15em;
+        }
+        .fraction > span:first-child {
+            border-bottom: 1px solid currentColor;
+            padding: 0 0.2em;
+        }
+        .fraction > span:last-child {
+            padding: 0 0.2em;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-sky-500/30 selection:text-sky-200">
+
+    <!-- Top Header & Navigation Bar -->
+    <header class="border-b border-slate-800/80 bg-slate-950/90 sticky top-0 z-30 backdrop-blur-md">
+        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 border border-sky-400/30">
+                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 17c3 0 4.5-10 7.5-10s3 6 5.5 6 2.5-3 5-3" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.5" d="M3 20h18" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">Kernel Density Estimation</h1>
+                        <span class="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">Probabilistic ML Lab</span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Non-parametric density estimation, Parzen-Rosenblatt windows & generative mixture intuition</p>
+                </div>
+            </div>
+
+            <!-- Live Equation Banner -->
+            <div class="hidden xl:flex items-center gap-3 bg-slate-900/90 border border-slate-800 px-4 py-1.5 rounded-xl text-sm">
+                <span class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Estimator:</span>
+                <div class="math-serif text-base text-slate-100 tracking-wide flex items-center">
+                    <span class="italic text-sky-400 font-semibold">p̂</span><span class="text-slate-400">(</span><span class="italic">x</span><span class="text-slate-400">)</span>
+                    <span class="mx-2 text-slate-500">=</span>
+                    <span class="fraction text-slate-200">
+                        <span>1</span>
+                        <span><i class="text-emerald-400">N</i><i class="text-amber-400">h</i></span>
+                    </span>
+                    <span class="text-lg mx-1 text-slate-400">&sum;</span>
+                    <sub class="text-[10px] text-slate-400 -ml-1 mr-1.5"><i>i</i>=1..<i>N</i></sub>
+                    <span class="italic text-indigo-300 font-semibold">K</span>
+                    <span class="text-slate-400 text-lg">(</span>
+                    <span class="fraction text-slate-200">
+                        <span><i>x</i> &minus; <i class="text-emerald-400">x<sub>i</sub></i></span>
+                        <span><i class="text-amber-400">h</i></span>
+                    </span>
+                    <span class="text-slate-400 text-lg">)</span>
+                </div>
+            </div>
+
+            <!-- Quick Preset & Action Controls -->
+            <div class="flex items-center gap-2">
+                <label for="presetSelect" class="text-xs text-slate-400 font-medium hidden md:inline">Dataset:</label>
+                <select id="presetSelect" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-sky-500 transition">
+                    <option value="bimodal" selected>Bimodal Mixture (N=12)</option>
+                    <option value="clustered_outlier">Cluster + Outlier (N=10)</option>
+                    <option value="single">Single Point Impulse (N=1)</option>
+                    <option value="two_points">Two Nearby Points (N=2)</option>
+                    <option value="skewed">Log-Normal Skewed (N=15)</option>
+                    <option value="uniform">Uniform Spread (N=14)</option>
+                </select>
+                <button id="sampleGenBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition shadow-sm" title="Draw a synthetic random sample x_new ~ p̂(x)">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Sample <i class="math-serif">x</i><sub>new</sub> ~ <i class="math-serif">p̂</i>(<i class="math-serif">x</i>)</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- Left / Center Column: Interactive Visualization & Probe Inspector (8 cols on lg) -->
+        <div class="lg:col-span-8 flex flex-col gap-4">
+
+            <!-- Main Canvas Card -->
+            <div class="glass-panel rounded-2xl p-4 sm:p-5 shadow-2xl relative overflow-hidden">
+                <!-- Top Canvas Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/80">
+                    <!-- Kernel Selector Pills -->
+                    <div class="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800">
+                        <button data-kernel="boxcar" class="kernel-btn px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+                            <span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"></span>
+                            <span>Boxcar (Top-Hat)</span>
+                        </button>
+                        <button data-kernel="gaussian" class="kernel-btn px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm">
+                            <span class="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block"></span>
+                            <span>Gaussian (RBF)</span>
+                        </button>
+                        <button data-kernel="both" class="kernel-btn px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+                            <span class="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-amber-400 to-sky-400 inline-block"></span>
+                            <span>Compare Both</span>
+                        </button>
+                    </div>
+
+                    <!-- Interaction Mode & Point Counter -->
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button id="modeAddDrag" class="px-2.5 py-1 rounded-lg font-medium bg-slate-800 text-slate-200 transition" title="Click axis to add point, drag existing points">
+                                + Add / Drag
+                            </button>
+                            <button id="modeRemove" class="px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-rose-300 transition" title="Click any data point to remove it">
+                                &times; Delete Click
+                            </button>
+                        </div>
+                        <button id="clearPointsBtn" class="px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-rose-950/50 hover:border-rose-700/50 text-xs text-slate-400 hover:text-rose-300 transition">
+                            Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interactive Canvas Container -->
+                <div class="relative w-full h-[390px] sm:h-[440px] select-none bg-slate-950/70 rounded-xl border border-slate-800/90 overflow-hidden">
+                    <canvas id="kdeCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+
+                    <!-- Floating Top-Left Legend Overlay -->
+                    <div class="absolute top-3 left-3 pointer-events-none flex flex-col gap-1.5 bg-slate-950/85 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-800/80 text-[11px]">
+                        <div id="legendGaussian" class="flex items-center gap-2">
+                            <span class="w-4 h-0.5 bg-sky-400 inline-block shadow-[0_0_6px_#38bdf8]"></span>
+                            <span class="text-slate-200 font-medium">Gaussian KDE <i class="math-serif">p̂</i><sub>G</sub>(<i class="math-serif">x</i>)</span>
+                        </div>
+                        <div id="legendBoxcar" class="flex items-center gap-2 hidden">
+                            <span class="w-4 h-0.5 bg-amber-400 inline-block shadow-[0_0_6px_#fbbf24]"></span>
+                            <span class="text-slate-200 font-medium">Boxcar KDE <i class="math-serif">p̂</i><sub>B</sub>(<i class="math-serif">x</i>)</span>
+                        </div>
+                        <div id="legendBasis" class="flex items-center gap-2">
+                            <span class="w-4 h-0 border-t border-dashed border-indigo-400 inline-block"></span>
+                            <span class="text-slate-400">Individual Kernels <span class="mono-num">(1/Nh)K(...)</span></span>
+                        </div>
+                        <div id="legendTruePdf" class="flex items-center gap-2 hidden">
+                            <span class="w-4 h-0 border-t-2 border-dotted border-emerald-400 inline-block"></span>
+                            <span class="text-emerald-300">True Generating PDF <i class="math-serif">p</i><sub>true</sub>(<i class="math-serif">x</i>)</span>
+                        </div>
+                    </div>
+
+                    <!-- Floating Generative Sample Toast Banner -->
+                    <div id="sampleToast" class="hidden absolute top-3 right-3 bg-slate-900/95 border border-emerald-500/50 text-emerald-200 px-3.5 py-2 rounded-xl shadow-xl text-xs max-w-xs pointer-events-none transition-all">
+                        <div class="font-semibold text-emerald-400 mb-0.5 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span id="sampleToastTitle">Ancestral Sampling Step</span>
+                        </div>
+                        <p id="sampleToastDesc" class="text-slate-300 leading-relaxed text-[11px]"></p>
+                    </div>
+
+                    <!-- Helper hint at bottom right of canvas -->
+                    <div class="absolute bottom-2 right-3 pointer-events-none text-[11px] text-slate-400 bg-slate-950/75 px-2.5 py-0.5 rounded-md border border-slate-800/60">
+                        Hover to inspect <i class="math-serif">p̂(x)</i> • Drag green rug points <i class="math-serif">x<sub>i</sub></i> horizontally • Click axis to add points
+                    </div>
+                </div>
+
+                <!-- Bandwidth & Visual Toggles Bar under Canvas -->
+                <div class="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                    <!-- Bandwidth Slider Control (7 cols) -->
+                    <div class="md:col-span-7 bg-slate-900/70 p-3 rounded-xl border border-slate-800/90">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <label for="bandwidthSlider" class="text-xs font-semibold uppercase tracking-wider text-amber-400">
+                                    Bandwidth (<span class="math-serif italic text-sm">h</span>)
+                                </label>
+                                <span id="bandwidthBadge" class="mono-num text-sm font-bold text-white bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md">0.55</span>
+                                <span id="regimeLabel" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">Balanced</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button id="btnUnderSmooth" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="Small h: High Variance / Spiky Overfitting">
+                                    Undersmooth
+                                </button>
+                                <button id="btnSilverman" class="text-[11px] px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 transition" title="Silverman's Rule of Thumb: h ≈ 1.06 * σ * N^(-1/5)">
+                                    Silverman <i class="math-serif">h</i>*
+                                </button>
+                                <button id="btnLOOCVOpt" class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition" title="Maximize Leave-One-Out Cross-Validation Log-Likelihood">
+                                    Max LOOCV
+                                </button>
+                                <button id="btnOverSmooth" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="Large h: High Bias / Washed-out Underfitting">
+                                    Oversmooth
+                                </button>
+                            </div>
+                        </div>
+                        <input id="bandwidthSlider" type="range" min="0.08" max="2.50" step="0.01" value="0.55" class="w-full" />
+                        <div class="flex justify-between text-[10px] text-slate-400 mono-num mt-1">
+                            <span>0.08 (Dirac-like / High Variance)</span>
+                            <span>1.25</span>
+                            <span>2.50 (Flat / High Bias)</span>
+                        </div>
+                    </div>
+
+                    <!-- Checkboxes & Layer Toggles (5 cols) -->
+                    <div class="md:col-span-5 grid grid-cols-2 gap-2 text-xs">
+                        <label class="flex items-center gap-2 bg-slate-900/70 px-3 py-2 rounded-xl border border-slate-800/90 cursor-pointer hover:border-slate-700 transition">
+                            <input type="checkbox" id="toggleIndividualKernels" checked class="rounded bg-slate-800 border-slate-600 text-sky-500 focus:ring-0">
+                            <span class="text-slate-300">Basis Kernels <i class="math-serif">K<sub>h</sub></i></span>
+                        </label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 px-3 py-2 rounded-xl border border-slate-800/90 cursor-pointer hover:border-slate-700 transition">
+                            <input type="checkbox" id="toggleTrueDensity" class="rounded bg-slate-800 border-slate-600 text-emerald-500 focus:ring-0">
+                            <span class="text-slate-300">True PDF <i class="math-serif">p</i><sub>true</sub>(<i class="math-serif">x</i>)</span>
+                        </label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 px-3 py-2 rounded-xl border border-slate-800/90 cursor-pointer hover:border-slate-700 transition">
+                            <input type="checkbox" id="toggleProbeLock" class="rounded bg-slate-800 border-slate-600 text-amber-500 focus:ring-0">
+                            <span class="text-slate-300">Pin Probe <i class="math-serif">x</i><sub>0</sub></span>
+                        </label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 px-3 py-2 rounded-xl border border-slate-800/90 cursor-pointer hover:border-slate-700 transition">
+                            <input type="checkbox" id="toggleHistogram" class="rounded bg-slate-800 border-slate-600 text-indigo-500 focus:ring-0">
+                            <span class="text-slate-300">Naive Histogram</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Live Mathematical Probe Inspector & Quantitative Probabilistic Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+
+                <!-- Live Pointwise Evaluation Breakdown (7 cols) -->
+                <div class="md:col-span-7 glass-panel rounded-2xl p-4 border border-slate-800/90 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Pointwise Kernel Summation Probe</h2>
+                            </div>
+                            <span id="probeCoordBadge" class="mono-num text-xs bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded">
+                                Probe x = 0.00
+                            </span>
+                        </div>
+
+                        <!-- Dynamic Formula Breakdown for Active Kernel -->
+                        <div id="probeFormulaBox" class="bg-slate-950/80 rounded-xl p-3 border border-slate-800/80 mb-3 text-xs leading-relaxed">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Top Contributing Data Points Table / Bars -->
+                    <div>
+                        <div class="flex justify-between text-[11px] text-slate-400 mb-1.5">
+                            <span>Individual Data Point Contributions to <i class="math-serif text-slate-200">p̂(x)</i>:</span>
+                            <span id="activeNeighborsCount" class="mono-num text-sky-300"></span>
+                        </div>
+                        <div id="contributionsContainer" class="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-24 overflow-y-auto pr-1">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quantitative Probabilistic ML Metrics & LOOCV Curve (5 cols) -->
+                <div class="md:col-span-5 glass-panel rounded-2xl p-4 border border-slate-800/90 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Probabilistic Diagnostics</h2>
+                            <span class="text-[11px] mono-num text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded">
+                                &int; p̂(x) dx = <span id="integralVal">1.000</span>
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2.5 mb-3">
+                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80">
+                                <div class="text-[10px] uppercase tracking-wider text-slate-400">Sample Size & Spread</div>
+                                <div class="mono-num text-sm font-bold text-slate-100 mt-0.5">
+                                    N = <span id="metricN" class="text-emerald-400">12</span>
+                                    <span class="text-xs font-normal text-slate-400 ml-1">(&sigma; = <span id="metricSigma">1.82</span>)</span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80">
+                                <div class="text-[10px] uppercase tracking-wider text-slate-400" title="Leave-One-Out Cross-Validation Log-Likelihood">LOOCV Log-Likelihood</div>
+                                <div id="metricLOOCV" class="mono-num text-sm font-bold text-sky-400 mt-0.5">-24.15</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mini LOOCV vs Bandwidth h Curve Canvas -->
+                    <div>
+                        <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                            <span>CV Log-Likelihood <i class="math-serif">L</i>(<i class="math-serif">h</i>) Profile:</span>
+                            <span id="loocvOptHint" class="mono-num text-[10px] text-emerald-400">Optimal h ≈ 0.48</span>
+                        </div>
+                        <div class="h-24 w-full bg-slate-950/90 rounded-xl border border-slate-800/90 overflow-hidden relative">
+                            <canvas id="loocvCanvas" class="w-full h-full block cursor-pointer" title="Click anywhere on profile curve to set bandwidth h"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Right Column: Guided Interactive Pedagogical Walkthrough (4 cols on lg) -->
+        <div class="lg:col-span-4 flex flex-col gap-4">
+            <div class="glass-panel rounded-2xl p-5 border border-slate-800/90 shadow-2xl flex flex-col">
+                <!-- Module Header -->
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[11px] font-mono uppercase tracking-wider text-sky-400 font-semibold flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        Guided Interactive Curriculum
+                    </span>
+                    <span id="lessonProgressText" class="text-xs mono-num text-slate-400">Lesson 1 of 4</span>
+                </div>
+
+                <!-- Lesson Selector Tabs -->
+                <div class="grid grid-cols-4 gap-1.5 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800 mb-4">
+                    <button data-lesson="0" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-semibold transition bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                        1. Boxcar
+                    </button>
+                    <button data-lesson="1" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-slate-200">
+                        2. Gaussian
+                    </button>
+                    <button data-lesson="2" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-slate-200">
+                        3. Bandwidth
+                    </button>
+                    <button data-lesson="3" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-slate-200">
+                        4. Prob. ML
+                    </button>
+                </div>
+
+                <!-- Dynamic Lesson Content Container -->
+                <div id="lessonContent" class="space-y-3.5 text-sm text-slate-300 leading-relaxed">
+                    <!-- Populated by JS -->
+                </div>
+
+                <!-- Interactive Try-It Action Box inside Lesson -->
+                <div class="mt-4 pt-4 border-t border-slate-800/90">
+                    <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                Hands-On Experiment
+                            </span>
+                            <button id="applyLessonPresetBtn" class="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-indigo-500/25 hover:bg-indigo-500/40 text-indigo-200 border border-indigo-400/30 transition">
+                                Configure Visual &rarr;
+                            </button>
+                        </div>
+                        <p id="lessonExperimentText" class="text-xs text-indigo-100/90 leading-relaxed"></p>
+                    </div>
+                </div>
+
+                <!-- Lesson Navigation Footer -->
+                <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <button id="prevLessonBtn" class="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 disabled:opacity-40 disabled:pointer-events-none transition">
+                        &larr; Previous Concept
+                    </button>
+                    <button id="nextLessonBtn" class="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition shadow-lg shadow-sky-500/20">
+                        Next Concept &rarr;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mathematical Kernel Reference Card -->
+            <div class="glass-panel rounded-2xl p-4 border border-slate-800/90 text-xs space-y-2.5">
+                <div class="font-bold uppercase tracking-wider text-slate-400 text-[11px] border-b border-slate-800 pb-1.5">
+                    Kernel Function Reference (<i class="math-serif">u = (x &minus; x<sub>i</sub>) / h</i>)
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+                    <div class="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/25 flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-amber-300">Boxcar (Top-Hat / Uniform)</div>
+                            <div class="text-[11px] text-slate-400">Local window count in <span class="mono-num">[x&minus;h, x+h]</span></div>
+                        </div>
+                        <div class="math-serif text-sm text-amber-100 bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
+                            <i>K</i>(<i>u</i>) = &frac12; <b>1</b>(|<i>u</i>| &le; 1)
+                        </div>
+                    </div>
+                    <div class="bg-slate-950/80 p-2.5 rounded-xl border border-sky-500/25 flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-sky-300">Gaussian (Normal / RBF)</div>
+                            <div class="text-[11px] text-slate-400">Smooth <span class="math-serif">C<sup>&infin;</sup></span> infinite support</div>
+                        </div>
+                        <div class="math-serif text-sm text-sky-100 bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
+                            <i>K</i>(<i>u</i>) = <span class="text-xs">(2&pi;)<sup>&minus;&frac12;</sup></span> <i>e</i><sup>&minus;&frac12;<i>u</i><sup>2</sup></sup>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        /***********************************************************************
+         * 1. APPLICATION STATE & PRESET DATASETS
+         ***********************************************************************/
+        const X_MIN = -6.0;
+        const X_MAX = 6.0;
+
+        const PRESETS = {
+            bimodal: {
+                name: "Bimodal Mixture (N=12)",
+                points: [-3.4, -2.9, -2.6, -2.3, -1.9, 1.1, 1.5, 1.8, 2.0, 2.3, 2.7, 3.2],
+                defaultH: 0.60,
+                truePdf: (x) => 0.42 * gaussianPdf(x, -2.6, 0.7) + 0.58 * gaussianPdf(x, 2.1, 0.75)
+            },
+            clustered_outlier: {
+                name: "Cluster + Outlier (N=10)",
+                points: [-2.8, -2.5, -2.3, -2.1, -2.0, -1.8, -1.6, -1.3, 3.8, 4.1],
+                defaultH: 0.45,
+                truePdf: (x) => 0.8 * gaussianPdf(x, -2.05, 0.5) + 0.2 * gaussianPdf(x, 3.95, 0.35)
+            },
+            single: {
+                name: "Single Point Impulse (N=1)",
+                points: [0.0],
+                defaultH: 1.00,
+                truePdf: null
+            },
+            two_points: {
+                name: "Two Nearby Points (N=2)",
+                points: [-0.8, 0.8],
+                defaultH: 0.90,
+                truePdf: null
+            },
+            skewed: {
+                name: "Log-Normal Skewed (N=15)",
+                points: [-3.7, -3.5, -3.4, -3.2, -3.0, -2.8, -2.6, -2.3, -1.9, -1.4, -0.8, -0.1, 0.8, 1.9, 3.4],
+                defaultH: 0.65,
+                truePdf: (x) => {
+                    const shifted = x + 4.2;
+                    if (shifted <= 0.05) return 0;
+                    const mu = 0.65, sigma = 0.68;
+                    return (1 / (shifted * sigma * Math.sqrt(2 * Math.PI))) *
+                           Math.exp(-Math.pow(Math.log(shifted) - mu, 2) / (2 * sigma * sigma));
+                }
+            },
+            uniform: {
+                name: "Uniform Spread (N=14)",
+                points: [-3.9, -3.3, -2.7, -2.1, -1.5, -0.9, -0.3, 0.3, 0.9, 1.5, 2.1, 2.7, 3.3, 3.9],
+                defaultH: 0.55,
+                truePdf: (x) => (x >= -4.2 && x <= 4.2) ? (1 / 8.4) : 0
+            }
+        };
+
+        const LESSONS = [
+            {
+                title: "1. From Histograms to the Boxcar Kernel",
+                badge: "Moving Window Intuition",
+                html: `
+                    <p>Suppose we observe <span class="math-serif italic text-emerald-400">N</span> continuous data points <span class="math-serif italic text-emerald-400">x<sub>1</sub>, &dots;, x<sub>N</sub></span> drawn from an unknown probability density <span class="math-serif italic">p(x)</span>. A classical histogram suffers from arbitrary bin edges and coarse resolution.</p>
+                    <p><strong class="text-amber-300">Parzen Window (Boxcar KDE):</strong> Instead of fixed bins, slide a window <span class="mono-num text-amber-200">[x &minus; h, x + h]</span> of total width <span class="mono-num text-amber-200">2h</span> across the axis and count how many points fall inside:</p>
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 math-serif text-center text-amber-200 text-base my-1">
+                        <i>p̂</i><sub>Boxcar</sub>(<i>x</i>) =
+                        <span class="fraction"><span>1</span><span><i>N</i> &middot; 2<i>h</i></span></span>
+                        &sum; <b>1</b>(|<i>x &minus; x<sub>i</sub></i>| &le; <i>h</i>)
+                    </div>
+                    <p>Equivalently, we place a <strong class="text-white">rectangular block</strong> of width <span class="mono-num">2h</span> and height <span class="mono-num">1/(2Nh)</span> (area = <span class="mono-num">1/N</span>) centered on each data point <span class="math-serif italic text-emerald-400">x<sub>i</sub></span> and sum their heights!</p>
+                    <p class="text-xs text-slate-400 border-l-2 border-amber-500/60 pl-2.5">Notice the problem: Because points abruptly enter and exit the <span class="mono-num">[x&minus;h, x+h]</span> window, <span class="math-serif italic">p̂(x)</span> has jagged step discontinuities and zero derivative almost everywhere.</p>
+                `,
+                experiment: "Click 'Configure Visual' to view 2 nearby points with a Boxcar kernel. Hover across the canvas to watch the yellow [x-h, x+h] window slide and create a step-jump plateau where both rectangles overlap!",
+                setup: () => {
+                    loadPreset('two_points');
+                    setKernelType('boxcar');
+                    setBandwidth(1.15);
+                    state.showIndividual = true;
+                    state.showHistogram = false;
+                    syncControls();
+                }
+            },
+            {
+                title: "2. Smoothing with the Gaussian Kernel",
+                badge: "Differentiable Density",
+                html: `
+                    <p>Why should a point at distance <span class="mono-num">0.99h</span> receive full weight while a point at <span class="mono-num">1.01h</span> abruptly gets zero weight?</p>
+                    <p><strong class="text-sky-300">The Gaussian Kernel Solution:</strong> We replace the sharp rectangular box with a smooth standard normal bell curve centered at each data point <span class="math-serif italic text-emerald-400">x<sub>i</sub></span> with standard deviation equal to the bandwidth <span class="math-serif italic text-amber-300">h</span>:</p>
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 math-serif text-center text-sky-200 text-base my-1">
+                        <i>K<sub>h</sub></i>(<i>x &minus; x<sub>i</sub></i>) =
+                        <span class="fraction"><span>1</span><span>&radic;(2&pi;) <i>h</i></span></span>
+                        exp<span class="text-slate-400">&Big(</span>&minus;<span class="fraction"><span>(<i>x &minus; x<sub>i</sub></i>)<sup>2</sup></span><span>2<i>h</i><sup>2</sup></span></span><span class="text-slate-400">&Big)</span>
+                    </div>
+                    <p>Because the sum of smooth <span class="math-serif">C<sup>&infin;</sup></span> Gaussians is also smooth, <span class="math-serif italic text-sky-300">p̂(x)</span> is continuous and differentiable everywhere—essential for gradient-based ML, score matching, and mode finding.</p>
+                `,
+                experiment: "Click 'Configure Visual' to overlay both Boxcar and Gaussian KDEs on the Bimodal dataset. Drag any green point along the x-axis and contrast how smoothly the blue Gaussian curve deforms compared to the yellow Boxcar steps.",
+                setup: () => {
+                    loadPreset('bimodal');
+                    setKernelType('both');
+                    setBandwidth(0.60);
+                    state.showIndividual = true;
+                    syncControls();
+                }
+            },
+            {
+                title: "3. Bandwidth (h) & The Bias-Variance Tradeoff",
+                badge: "Hyperparameter Tuning",
+                html: `
+                    <p>In Kernel Density Estimation, the choice of kernel shape (<span class="math-serif italic">K</span>) is secondary; the <strong class="text-amber-300">bandwidth <span class="math-serif italic">h</span></strong> controls the fundamental <strong class="text-white">Bias-Variance tradeoff</strong>:</p>
+                    <ul class="space-y-1.5 text-xs list-disc list-inside text-slate-300">
+                        <li><strong class="text-rose-300">Small <i class="math-serif">h</i> &rarr; 0 (Undersmoothed / Overfitting):</strong> High variance, low bias. Each kernel shrinks into a sharp spike (<span class="math-serif">&delta;(x &minus; x<sub>i</sub>)</span>), memorizing sample noise and creating spurious modes.</li>
+                        <li><strong class="text-indigo-300">Large <i class="math-serif">h</i> &rarr; &infin; (Oversmoothed / Underfitting):</strong> High bias, low variance. Kernels become ultra-wide, washing out genuine bimodal structure into a single flat bump.</li>
+                    </ul>
+                    <p class="text-xs text-slate-400">Regardless of <span class="math-serif italic">h</span>, each scaled kernel integrates to <span class="mono-num">1/N</span>, guaranteeing <span class="mono-num text-emerald-300">&int; p̂(x) dx = 1</span>.</p>
+                `,
+                experiment: "Click 'Configure Visual' to display the True Generative PDF (green dotted curve). Use the Undersmooth, Silverman h*, and Oversmooth quick buttons below the plot to see how h recovers or obscures the two true modes.",
+                setup: () => {
+                    loadPreset('bimodal');
+                    setKernelType('gaussian');
+                    setBandwidth(0.18);
+                    state.showTruePdf = true;
+                    state.showIndividual = true;
+                    syncControls();
+                }
+            },
+            {
+                title: "4. Probabilistic ML: Generative Mixture & LOOCV",
+                badge: "Cross-Validation & Sampling",
+                html: `
+                    <p><strong class="text-emerald-300">1. KDE as a Non-Parametric Mixture Model:</strong> A KDE is literally an equiprobable mixture of <span class="math-serif italic">N</span> component distributions centered at the training points! To sample <span class="math-serif italic">x<sub>new</sub> ~ p̂(x)</span>:</p>
+                    <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs mono-num text-emerald-200">
+                        1. Pick index i &sim; Uniform({1, ..., N})<br>
+                        2. Sample noise &epsilon; &sim; K(u) &nbsp;&rArr;&nbsp; x<sub>new</sub> = x<sub>i</sub> + h &middot; &epsilon;
+                    </div>
+                    <p><strong class="text-sky-300">2. Selecting <i class="math-serif">h</i> via Leave-One-Out CV:</strong> We cannot maximize training log-likelihood <span class="mono-num">&sum; log p̂(x<sub>i</sub>)</span> directly because <span class="math-serif italic">h &rarr; 0</span> drives likelihood to <span class="mono-num">+&infin;</span>! Instead, we evaluate the <strong class="text-white">Leave-One-Out density</strong> <span class="math-serif italic">p̂<sub>&minus;i</sub>(x<sub>i</sub>)</span>:</p>
+                    <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 math-serif text-center text-sky-200 text-xs">
+                        CV(<i>h</i>) = <span class="fraction"><span>1</span><span><i>N</i></span></span> &sum;<sub><i>i</i>=1..<i>N</i></sub> log <i>p̂<sub>&minus;i</sub></i>(<i>x<sub>i</sub></i>)
+                    </div>
+                `,
+                experiment: "1) Click 'Sample x_new ~ p̂(x)' in the top header to watch ancestral mixture sampling in action! 2) Switch to Boxcar on 'Cluster + Outlier' to see why isolated outliers cause p̂_{-i}(x_i) = 0 and LOOCV = -∞!",
+                setup: () => {
+                    loadPreset('clustered_outlier');
+                    setKernelType('gaussian');
+                    setBandwidth(0.45);
+                    state.showTruePdf = true;
+                    syncControls();
+                }
+            }
+        ];
+
+        const state = {
+            presetKey: 'bimodal',
+            points: [...PRESETS.bimodal.points],
+            kernelType: 'gaussian', // 'gaussian' | 'boxcar' | 'both'
+            h: 0.55,
+            showIndividual: true,
+            showTruePdf: false,
+            showHistogram: false,
+            probeLocked: false,
+            probeX: -1.85,
+            isHovering: false,
+            interactionMode: 'add_drag', // 'add_drag' | 'remove'
+            draggingIndex: -1,
+            hoveredPointIndex: -1,
+            currentLesson: 0,
+            // Generative sample animation state
+            sampleAnim: null
+        };
+
+        /***********************************************************************
+         * 2. MATHEMATICAL & KERNEL FUNCTIONS
+         ***********************************************************************/
+        function gaussianPdf(x, mu = 0, sigma = 1) {
+            const u = (x - mu) / sigma;
+            return (1 / (Math.sqrt(2 * Math.PI) * sigma)) * Math.exp(-0.5 * u * u);
+        }
+
+        function boxcarPdf(x, mu = 0, h = 1) {
+            return Math.abs(x - mu) <= h ? (1 / (2 * h)) : 0;
+        }
+
+        function evaluateKernelContribution(x, xi, h, type, N) {
+            if (N === 0) return 0;
+            if (type === 'boxcar') {
+                return boxcarPdf(x, xi, h) / N;
+            } else {
+                return gaussianPdf(x, xi, h) / N;
+            }
+        }
+
+        function evaluateKDE(x, points, h, type) {
+            const N = points.length;
+            if (N === 0) return 0;
+            let sum = 0;
+            for (let i = 0; i < N; i++) {
+                sum += evaluateKernelContribution(x, points[i], h, type, N);
+            }
+            return sum;
+        }
+
+        // Compute sample standard deviation and IQR
+        function computeStats(points) {
+            const N = points.length;
+            if (N === 0) return { mean: 0, std: 1, silvermanH: 0.5 };
+            if (N === 1) return { mean: points[0], std: 1.0, silvermanH: 0.6 };
+
+            const mean = points.reduce((a, b) => a + b, 0) / N;
+            const variance = points.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / (N - 1);
+            const std = Math.max(Math.sqrt(variance), 0.15);
+
+            // Silverman's rule of thumb
+            const sorted = [...points].sort((a, b) => a - b);
+            const q25 = sorted[Math.floor(N * 0.25)];
+            const q75 = sorted[Math.floor(N * 0.75)];
+            const iqr = Math.max(q75 - q25, 0.2);
+            const A = Math.min(std, iqr / 1.34);
+            const silvermanH = Math.max(0.12, Math.min(2.4, 0.9 * A * Math.pow(N, -0.2)));
+
+            return { mean, std, silvermanH };
+        }
+
+        // Compute Leave-One-Out Cross-Validation Total Log-Likelihood
+        function computeLOOCV(points, h, type) {
+            const N = points.length;
+            if (N < 2) return 0;
+            const activeType = type === 'both' ? 'gaussian' : type;
+            let totalLogLikelihood = 0;
+
+            for (let i = 0; i < N; i++) {
+                let leaveOneOutSum = 0;
+                for (let j = 0; j < N; j++) {
+                    if (i === j) continue;
+                    if (activeType === 'boxcar') {
+                        leaveOneOutSum += boxcarPdf(points[i], points[j], h);
+                    } else {
+                        leaveOneOutSum += gaussianPdf(points[i], points[j], h);
+                    }
+                }
+                const looDensity = leaveOneOutSum / (N - 1);
+                if (looDensity <= 1e-15) {
+                    return -Infinity;
+                }
+                totalLogLikelihood += Math.log(looDensity);
+            }
+            return totalLogLikelihood;
+        }
+
+        // Numerical integration verification over [-10, 10]
+        function verifyTotalArea(points, h, type) {
+            if (points.length === 0) return 0;
+            const activeType = type === 'both' ? 'gaussian' : type;
+            const minX = -12, maxX = 12, steps = 600;
+            const dx = (maxX - minX) / steps;
+            let area = 0;
+            for (let k = 0; k <= steps; k++) {
+                const x = minX + k * dx;
+                const weight = (k === 0 || k === steps) ? 0.5 : 1.0;
+                area += weight * evaluateKDE(x, points, h, activeType) * dx;
+            }
+            return area;
+        }
+
+        /***********************************************************************
+         * 3. CANVAS RENDERING (MAIN KDE VISUALIZATION & LOOCV PROFILE)
+         ***********************************************************************/
+        const kdeCanvas = document.getElementById('kdeCanvas');
+        const ctx = kdeCanvas.getContext('2d');
+        const loocvCanvas = document.getElementById('loocvCanvas');
+        const loocvCtx = loocvCanvas.getContext('2d');
+
+        let canvasGeom = { width: 800, height: 420, padL: 52, padR: 24, padT: 26, padB: 54, yMax: 0.6 };
+
+        function xToPx(x) {
+            const plotW = canvasGeom.width - canvasGeom.padL - canvasGeom.padR;
+            return canvasGeom.padL + ((x - X_MIN) / (X_MAX - X_MIN)) * plotW;
+        }
+
+        function pxToX(px) {
+            const plotW = canvasGeom.width - canvasGeom.padL - canvasGeom.padR;
+            const norm = (px - canvasGeom.padL) / plotW;
+            return Math.max(X_MIN + 0.1, Math.min(X_MAX - 0.1, X_MIN + norm * (X_MAX - X_MIN)));
+        }
+
+        function yToPy(y) {
+            const plotH = canvasGeom.height - canvasGeom.padT - canvasGeom.padB;
+            return canvasGeom.padT + plotH - (y / canvasGeom.yMax) * plotH;
+        }
+
+        function resizeCanvases() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = kdeCanvas.getBoundingClientRect();
+            canvasGeom.width = rect.width;
+            canvasGeom.height = rect.height;
+            kdeCanvas.width = rect.width * dpr;
+            kdeCanvas.height = rect.height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            const lRect = loocvCanvas.getBoundingClientRect();
+            loocvCanvas.width = lRect.width * dpr;
+            loocvCanvas.height = lRect.height * dpr;
+            loocvCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            renderAll();
+        }
+
+        function renderMainCanvas() {
+            const { width, height, padL, padR, padT, padB } = canvasGeom;
+            const plotW = width - padL - padR;
+            const plotH = height - padT - padB;
+            const baselineY = padT + plotH;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Compute dynamic yMax so curves fit comfortably while maintaining scale smoothness
+            let peakVal = 0.45;
+            const sampleSteps = 250;
+            for (let s = 0; s <= sampleSteps; s++) {
+                const x = X_MIN + (s / sampleSteps) * (X_MAX - X_MIN);
+                if (state.kernelType === 'gaussian' || state.kernelType === 'both') {
+                    peakVal = Math.max(peakVal, evaluateKDE(x, state.points, state.h, 'gaussian'));
+                }
+                if (state.kernelType === 'boxcar' || state.kernelType === 'both') {
+                    peakVal = Math.max(peakVal, evaluateKDE(x, state.points, state.h, 'boxcar'));
+                }
+            }
+            canvasGeom.yMax = Math.min(2.8, Math.max(0.45, peakVal * 1.18));
+
+            // 1. Draw Grid Lines & Axes
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.35)';
+            ctx.lineWidth = 1;
+            ctx.font = '11px "JetBrains Mono", monospace';
+            ctx.fillStyle = '#64748b';
+
+            // Horizontal Y grid lines
+            const yTicks = 5;
+            for (let i = 0; i <= yTicks; i++) {
+                const yVal = (canvasGeom.yMax / yTicks) * i;
+                const py = yToPy(yVal);
+                ctx.beginPath();
+                ctx.moveTo(padL, py);
+                ctx.lineTo(width - padR, py);
+                ctx.stroke();
+
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(yVal.toFixed(2), padL - 8, py);
+            }
+
+            // Vertical X grid lines
+            for (let xTick = Math.ceil(X_MIN); xTick <= Math.floor(X_MAX); xTick += 1) {
+                const px = xToPx(xTick);
+                ctx.beginPath();
+                ctx.moveTo(px, padT);
+                ctx.lineTo(px, baselineY);
+                ctx.stroke();
+
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillStyle = xTick === 0 ? '#94a3b8' : '#64748b';
+                ctx.fillText(xTick.toFixed(0), px, baselineY + 26);
+            }
+
+            // Axis labels
+            ctx.save();
+            ctx.translate(14, padT + plotH / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '500 11px Inter, sans-serif';
+            ctx.fillText('Probability Density p̂(x)', 0, 0);
+            ctx.restore();
+
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '500 11px Inter, sans-serif';
+            ctx.fillText('Random Variable x', width - padR, baselineY + 38);
+
+            // 2. Optional Naive Histogram Overlay (for Lesson 1 comparison)
+            if (state.showHistogram && state.points.length > 0) {
+                const binWidth = state.h * 2;
+                const numBins = Math.ceil((X_MAX - X_MIN) / binWidth);
+                ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
+                ctx.strokeStyle = 'rgba(129, 140, 248, 0.45)';
+                ctx.lineWidth = 1.2;
+
+                for (let b = 0; b < numBins; b++) {
+                    const bStart = X_MIN + b * binWidth;
+                    const bEnd = bStart + binWidth;
+                    const count = state.points.filter(p => p >= bStart && p < bEnd).length;
+                    if (count > 0) {
+                        const density = count / (state.points.length * binWidth);
+                        const x1 = xToPx(bStart);
+                        const x2 = xToPx(Math.min(X_MAX, bEnd));
+                        const yTop = yToPy(density);
+                        ctx.fillRect(x1, yTop, x2 - x1, baselineY - yTop);
+                        ctx.strokeRect(x1, yTop, x2 - x1, baselineY - yTop);
+                    }
+                }
+            }
+
+            // 3. Optional True Underlying Generative PDF
+            const presetObj = PRESETS[state.presetKey];
+            if (state.showTruePdf && presetObj && presetObj.truePdf) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 2;
+                const steps = 350;
+                for (let i = 0; i <= steps; i++) {
+                    const x = X_MIN + (i / steps) * (X_MAX - X_MIN);
+                    const y = presetObj.truePdf(x);
+                    const px = xToPx(x);
+                    const py = yToPy(y);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 4. Active Probe Window Highlight for Boxcar ([probeX - h, probeX + h])
+            const activeKernelForBasis = state.kernelType === 'boxcar' ? 'boxcar' : 'gaussian';
+            if (state.kernelType === 'boxcar' || state.kernelType === 'both') {
+                const winLeft = xToPx(Math.max(X_MIN, state.probeX - state.h));
+                const winRight = xToPx(Math.min(X_MAX, state.probeX + state.h));
+                ctx.fillStyle = 'rgba(251, 191, 36, 0.06)';
+                ctx.fillRect(winLeft, padT, winRight - winLeft, plotH);
+
+                ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(winLeft, padT);
+                ctx.lineTo(winLeft, baselineY);
+                ctx.moveTo(winRight, padT);
+                ctx.lineTo(winRight, baselineY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 5. Draw Individual Scaled Basis Kernels: (1 / Nh) * K((x - x_i) / h)
+            const N = state.points.length;
+            if (state.showIndividual && N > 0) {
+                for (let i = 0; i < N; i++) {
+                    const xi = state.points[i];
+                    const contribAtProbe = evaluateKernelContribution(state.probeX, xi, state.h, activeKernelForBasis, N);
+                    const isHighlighted = contribAtProbe > 1e-4;
+
+                    ctx.save();
+                    if (activeKernelForBasis === 'boxcar') {
+                        const xL = xToPx(Math.max(X_MIN, xi - state.h));
+                        const xR = xToPx(Math.min(X_MAX, xi + state.h));
+                        const boxH = 1 / (2 * N * state.h);
+                        const yT = yToPy(boxH);
+
+                        ctx.fillStyle = isHighlighted ? 'rgba(251, 191, 36, 0.16)' : 'rgba(148, 163, 184, 0.05)';
+                        ctx.strokeStyle = isHighlighted ? 'rgba(251, 191, 36, 0.75)' : 'rgba(148, 163, 184, 0.35)';
+                        ctx.lineWidth = isHighlighted ? 1.5 : 1;
+                        ctx.setLineDash([3, 3]);
+                        ctx.fillRect(xL, yT, xR - xL, baselineY - yT);
+                        ctx.strokeRect(xL, yT, xR - xL, baselineY - yT);
+                    } else {
+                        ctx.beginPath();
+                        const steps = 160;
+                        const span = Math.max(state.h * 3.8, 0.6);
+                        const startX = Math.max(X_MIN, xi - span);
+                        const endX = Math.min(X_MAX, xi + span);
+                        ctx.moveTo(xToPx(startX), baselineY);
+                        for (let s = 0; s <= steps; s++) {
+                            const x = startX + (s / steps) * (endX - startX);
+                            const y = evaluateKernelContribution(x, xi, state.h, 'gaussian', N);
+                            ctx.lineTo(xToPx(x), yToPy(y));
+                        }
+                        ctx.lineTo(xToPx(endX), baselineY);
+                        ctx.closePath();
+
+                        const maxPossibleHeight = 1 / (Math.sqrt(2 * Math.PI) * state.h * N);
+                        const relStrength = Math.min(1, contribAtProbe / Math.max(1e-6, maxPossibleHeight));
+
+                        ctx.fillStyle = `rgba(99, 102, 241, ${0.03 + 0.18 * relStrength})`;
+                        ctx.fill();
+
+                        ctx.strokeStyle = relStrength > 0.05
+                            ? `rgba(129, 140, 248, ${0.35 + 0.55 * relStrength})`
+                            : 'rgba(100, 116, 139, 0.3)';
+                        ctx.lineWidth = relStrength > 0.1 ? 1.4 : 1.0;
+                        ctx.setLineDash([3, 3]);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // 6. Draw Main Summed KDE Curve(s)
+            if (N > 0) {
+                // 6A. Boxcar Total Curve (exact step function rendering)
+                if (state.kernelType === 'boxcar' || state.kernelType === 'both') {
+                    const steps = 750;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(xToPx(X_MIN), baselineY);
+                    for (let s = 0; s <= steps; s++) {
+                        const x = X_MIN + (s / steps) * (X_MAX - X_MIN);
+                        const y = evaluateKDE(x, state.points, state.h, 'boxcar');
+                        ctx.lineTo(xToPx(x), yToPy(y));
+                    }
+                    ctx.lineTo(xToPx(X_MAX), baselineY);
+                    ctx.closePath();
+
+                    const gradB = ctx.createLinearGradient(0, padT, 0, baselineY);
+                    gradB.addColorStop(0, state.kernelType === 'both' ? 'rgba(251, 191, 36, 0.14)' : 'rgba(251, 191, 36, 0.24)');
+                    gradB.addColorStop(1, 'rgba(251, 191, 36, 0.01)');
+                    ctx.fillStyle = gradB;
+                    ctx.fill();
+
+                    // Stroke top contour
+                    ctx.beginPath();
+                    for (let s = 0; s <= steps; s++) {
+                        const x = X_MIN + (s / steps) * (X_MAX - X_MIN);
+                        const y = evaluateKDE(x, state.points, state.h, 'boxcar');
+                        if (s === 0) ctx.moveTo(xToPx(x), yToPy(y));
+                        else ctx.lineTo(xToPx(x), yToPy(y));
+                    }
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 2.5;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 6B. Gaussian Total Curve
+                if (state.kernelType === 'gaussian' || state.kernelType === 'both') {
+                    const steps = 450;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(xToPx(X_MIN), baselineY);
+                    for (let s = 0; s <= steps; s++) {
+                        const x = X_MIN + (s / steps) * (X_MAX - X_MIN);
+                        const y = evaluateKDE(x, state.points, state.h, 'gaussian');
+                        ctx.lineTo(xToPx(x), yToPy(y));
+                    }
+                    ctx.lineTo(xToPx(X_MAX), baselineY);
+                    ctx.closePath();
+
+                    const gradG = ctx.createLinearGradient(0, padT, 0, baselineY);
+                    gradG.addColorStop(0, 'rgba(56, 189, 248, 0.26)');
+                    gradG.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
+                    ctx.fillStyle = gradG;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    for (let s = 0; s <= steps; s++) {
+                        const x = X_MIN + (s / steps) * (X_MAX - X_MIN);
+                        const y = evaluateKDE(x, state.points, state.h, 'gaussian');
+                        if (s === 0) ctx.moveTo(xToPx(x), yToPy(y));
+                        else ctx.lineTo(xToPx(x), yToPy(y));
+                    }
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 2.8;
+                    ctx.shadowColor = 'rgba(56, 189, 248, 0.4)';
+                    ctx.shadowBlur = 8;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // 7. Interactive Probe Line & Intersection Dots at x = state.probeX
+            const probePx = xToPx(state.probeX);
+            ctx.save();
+            ctx.strokeStyle = state.probeLocked ? '#fbbf24' : 'rgba(244, 63, 94, 0.75)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(probePx, padT);
+            ctx.lineTo(probePx, baselineY);
+            ctx.stroke();
+
+            // Draw individual kernel contribution markers along the vertical probe line
+            if (state.showIndividual && N > 0) {
+                for (let i = 0; i < N; i++) {
+                    const cVal = evaluateKernelContribution(state.probeX, state.points[i], state.h, activeKernelForBasis, N);
+                    if (cVal > 0.002) {
+                        const cPy = yToPy(cVal);
+                        ctx.fillStyle = activeKernelForBasis === 'boxcar' ? '#fbbf24' : '#818cf8';
+                        ctx.beginPath();
+                        ctx.arc(probePx, cPy, 3.2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // Draw total density marker dot(s) on the main curve
+            if (N > 0) {
+                if (state.kernelType === 'boxcar' || state.kernelType === 'both') {
+                    const yB = evaluateKDE(state.probeX, state.points, state.h, 'boxcar');
+                    const pyB = yToPy(yB);
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    ctx.arc(probePx, pyB, 5.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 1.8;
+                    ctx.stroke();
+                }
+                if (state.kernelType === 'gaussian' || state.kernelType === 'both') {
+                    const yG = evaluateKDE(state.probeX, state.points, state.h, 'gaussian');
+                    const pyG = yToPy(yG);
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.beginPath();
+                    ctx.arc(probePx, pyG, 5.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 1.8;
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+
+            // 8. Draw Baseline & Data Point Rug Plot (Draggable Green Nodes)
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(padL, baselineY);
+            ctx.lineTo(width - padR, baselineY);
+            ctx.stroke();
+
+            for (let i = 0; i < N; i++) {
+                const xi = state.points[i];
+                const px = xToPx(xi);
+                const isHovered = i === state.hoveredPointIndex || i === state.draggingIndex;
+                const isSampleSelected = state.sampleAnim && state.sampleAnim.selectedIndex === i;
+
+                // Rug tick mark
+                ctx.strokeStyle = isSampleSelected ? '#f43f5e' : (isHovered ? '#6ee7b7' : '#10b981');
+                ctx.lineWidth = isHovered || isSampleSelected ? 2.5 : 1.8;
+                ctx.beginPath();
+                ctx.moveTo(px, baselineY - 6);
+                ctx.lineTo(px, baselineY + 10);
+                ctx.stroke();
+
+                // Interactive circular handle on the x-axis
+                ctx.fillStyle = isSampleSelected ? '#f43f5e' : (isHovered ? '#34d399' : '#059669');
+                ctx.beginPath();
+                ctx.arc(px, baselineY + 12, isHovered || isSampleSelected ? 6.5 : 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#090d16';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+
+            // 9. Draw Generative Ancestral Sample Animation Overlay (if active)
+            if (state.sampleAnim) {
+                const { selectedX, sampledX, kernelType } = state.sampleAnim;
+                const selPx = xToPx(selectedX);
+                const sampPx = xToPx(sampledX);
+
+                ctx.save();
+                // Highlight the chosen component kernel
+                ctx.beginPath();
+                const steps = 120;
+                for (let s = 0; s <= steps; s++) {
+                    const x = X_MIN + (s / steps) * (X_MAX - X_MIN);
+                    const y = evaluateKernelContribution(x, selectedX, state.h, kernelType, Math.max(1, N));
+                    if (s === 0) ctx.moveTo(xToPx(x), yToPy(y));
+                    else ctx.lineTo(xToPx(x), yToPy(y));
+                }
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+
+                // Arrow from x_i to x_new = x_i + h * eps
+                ctx.strokeStyle = '#a7f3d0';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(selPx, baselineY - 18);
+                ctx.lineTo(sampPx, baselineY - 18);
+                ctx.stroke();
+
+                // Sampled point star/circle
+                ctx.fillStyle = '#fde047';
+                ctx.beginPath();
+                ctx.arc(sampPx, baselineY, 7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#090d16';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.font = 'bold 11px "JetBrains Mono", monospace';
+                ctx.fillStyle = '#fde047';
+                ctx.textAlign = 'center';
+                ctx.fillText(`x_new = ${sampledX.toFixed(2)}`, sampPx, baselineY - 26);
+                ctx.restore();
+            }
+        }
+
+        // Render Mini LOOCV Log-Likelihood Profile Curve
+        function renderLOOCVProfile() {
+            const rect = loocvCanvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            loocvCtx.clearRect(0, 0, w, h);
+
+            if (state.points.length < 2) {
+                loocvCtx.fillStyle = '#64748b';
+                loocvCtx.font = '11px Inter, sans-serif';
+                loocvCtx.textAlign = 'center';
+                loocvCtx.fillText('Need N ≥ 2 points for Cross-Validation', w / 2, h / 2);
+                document.getElementById('loocvOptHint').textContent = 'N/A';
+                return;
+            }
+
+            const hMin = 0.08, hMax = 2.50, numSamples = 70;
+            const activeType = state.kernelType === 'both' ? 'gaussian' : state.kernelType;
+            const scores = [];
+            let maxScore = -Infinity;
+            let minFiniteScore = Infinity;
+            let bestH = state.h;
+
+            for (let i = 0; i <= numSamples; i++) {
+                const candH = hMin + (i / numSamples) * (hMax - hMin);
+                const val = computeLOOCV(state.points, candH, activeType);
+                scores.push({ h: candH, val });
+                if (Number.isFinite(val)) {
+                    if (val > maxScore) {
+                        maxScore = val;
+                        bestH = candH;
+                    }
+                    if (val < minFiniteScore) {
+                        minFiniteScore = val;
+                    }
+                }
+            }
+
+            document.getElementById('loocvOptHint').textContent =
+                Number.isFinite(maxScore) ? `Peak h* ≈ ${bestH.toFixed(2)}` : 'All -∞';
+
+            const padL = 10, padR = 10, padT = 12, padB = 18;
+            const plotW = w - padL - padR;
+            const plotH = h - padT - padB;
+
+            const floorVal = Number.isFinite(minFiniteScore) ? Math.min(minFiniteScore, maxScore - 15) : -50;
+            const ceilVal = Number.isFinite(maxScore) ? maxScore + 1.5 : 0;
+
+            const hToX = (hv) => padL + ((hv - hMin) / (hMax - hMin)) * plotW;
+            const valToY = (vv) => {
+                if (!Number.isFinite(vv)) return padT + plotH;
+                const clamped = Math.max(floorVal, Math.min(ceilVal, vv));
+                return padT + plotH - ((clamped - floorVal) / Math.max(1e-5, ceilVal - floorVal)) * plotH;
+            };
+
+            // Draw -infinity warning zone for Boxcar when h is too small
+            loocvCtx.fillStyle = 'rgba(244, 63, 94, 0.1)';
+            for (let i = 0; i < scores.length - 1; i++) {
+                if (!Number.isFinite(scores[i].val)) {
+                    const x1 = hToX(scores[i].h);
+                    const x2 = hToX(scores[i + 1].h);
+                    loocvCtx.fillRect(x1, padT, x2 - x1 + 1, plotH);
+                }
+            }
+
+            // Draw LOOCV curve
+            loocvCtx.beginPath();
+            let started = false;
+            for (let i = 0; i < scores.length; i++) {
+                const { h: candH, val } = scores[i];
+                if (Number.isFinite(val)) {
+                    const px = hToX(candH);
+                    const py = valToY(val);
+                    if (!started) {
+                        loocvCtx.moveTo(px, py);
+                        started = true;
+                    } else {
+                        loocvCtx.lineTo(px, py);
+                    }
+                } else {
+                    started = false;
+                }
+            }
+            loocvCtx.strokeStyle = activeType === 'boxcar' ? '#fbbf24' : '#38bdf8';
+            loocvCtx.lineWidth = 2;
+            loocvCtx.stroke();
+
+            // Mark optimal bestH vertical line
+            if (Number.isFinite(maxScore)) {
+                const optPx = hToX(bestH);
+                loocvCtx.strokeStyle = 'rgba(52, 211, 153, 0.5)';
+                loocvCtx.setLineDash([2, 2]);
+                loocvCtx.beginPath();
+                loocvCtx.moveTo(optPx, padT);
+                loocvCtx.lineTo(optPx, padT + plotH);
+                loocvCtx.stroke();
+                loocvCtx.setLineDash([]);
+            }
+
+            // Mark current bandwidth state.h on the curve
+            const curPx = hToX(state.h);
+            const curScore = computeLOOCV(state.points, state.h, activeType);
+            const curPy = valToY(curScore);
+
+            loocvCtx.strokeStyle = '#f8fafc';
+            loocvCtx.lineWidth = 1.2;
+            loocvCtx.beginPath();
+            loocvCtx.moveTo(curPx, padT);
+            loocvCtx.lineTo(curPx, padT + plotH);
+            loocvCtx.stroke();
+
+            loocvCtx.fillStyle = Number.isFinite(curScore) ? '#38bdf8' : '#f43f5e';
+            loocvCtx.beginPath();
+            loocvCtx.arc(curPx, curPy, 4.5, 0, Math.PI * 2);
+            loocvCtx.fill();
+            loocvCtx.strokeStyle = '#090d16';
+            loocvCtx.stroke();
+
+            // X-axis labels
+            loocvCtx.fillStyle = '#64748b';
+            loocvCtx.font = '10px "JetBrains Mono", monospace';
+            loocvCtx.textAlign = 'left';
+            loocvCtx.fillText('h=0.08', padL, h - 4);
+            loocvCtx.textAlign = 'right';
+            loocvCtx.fillText('h=2.50', w - padR, h - 4);
+        }
+
+        /***********************************************************************
+         * 4. UPDATING QUANTITATIVE METRICS & PROBE INSPECTOR UI
+         ***********************************************************************/
+        function updateInspectorAndMetrics() {
+            const N = state.points.length;
+            const { std, silvermanH } = computeStats(state.points);
+
+            // Bandwidth badge & regime description
+            document.getElementById('bandwidthBadge').textContent = state.h.toFixed(2);
+            const regimeEl = document.getElementById('regimeLabel');
+            if (state.h < silvermanH * 0.55) {
+                regimeEl.textContent = 'Undersmoothed (High Variance)';
+                regimeEl.className = 'text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30';
+            } else if (state.h > silvermanH * 1.65) {
+                regimeEl.textContent = 'Oversmoothed (High Bias)';
+                regimeEl.className = 'text-[11px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+            } else {
+                regimeEl.textContent = 'Well-Calibrated Smoothing';
+                regimeEl.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+            }
+
+            // Legend visibility
+            document.getElementById('legendGaussian').classList.toggle('hidden', state.kernelType === 'boxcar');
+            document.getElementById('legendBoxcar').classList.toggle('hidden', state.kernelType === 'gaussian');
+            document.getElementById('legendBasis').classList.toggle('hidden', !state.showIndividual);
+            document.getElementById('legendTruePdf').classList.toggle('hidden', !state.showTruePdf);
+
+            // Metrics panel
+            document.getElementById('metricN').textContent = N;
+            document.getElementById('metricSigma').textContent = std.toFixed(2);
+
+            const area = verifyTotalArea(state.points, state.h, state.kernelType);
+            document.getElementById('integralVal').textContent = area.toFixed(3);
+
+            const activeType = state.kernelType === 'both' ? 'gaussian' : state.kernelType;
+            const loocv = computeLOOCV(state.points, state.h, activeType);
+            const loocvEl = document.getElementById('metricLOOCV');
+            if (N < 2) {
+                loocvEl.textContent = 'N/A';
+                loocvEl.className = 'mono-num text-sm font-bold text-slate-400 mt-0.5';
+            } else if (!Number.isFinite(loocv)) {
+                loocvEl.textContent = '-∞ (Zero Density!)';
+                loocvEl.className = 'mono-num text-sm font-bold text-rose-400 mt-0.5';
+            } else {
+                loocvEl.textContent = loocv.toFixed(2);
+                loocvEl.className = 'mono-num text-sm font-bold text-sky-400 mt-0.5';
+            }
+
+            // Live Pointwise Probe Formula Breakdown
+            document.getElementById('probeCoordBadge').textContent =
+                `Probe x = ${state.probeX.toFixed(2)}${state.probeLocked ? ' (Pinned)' : ''}`;
+
+            const probeBox = document.getElementById('probeFormulaBox');
+            const pGauss = evaluateKDE(state.probeX, state.points, state.h, 'gaussian');
+            const pBox = evaluateKDE(state.probeX, state.points, state.h, 'boxcar');
+
+            if (state.kernelType === 'boxcar') {
+                const insideCount = state.points.filter(xi => Math.abs(state.probeX - xi) <= state.h).length;
+                const rectHeight = N > 0 ? (1 / (2 * N * state.h)) : 0;
+                probeBox.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <span class="text-amber-300 font-semibold">Boxcar Window <span class="mono-num">[${(state.probeX - state.h).toFixed(2)}, ${(state.probeX + state.h).toFixed(2)}]</span>:</span>
+                            <span class="text-slate-300 ml-1"><strong class="mono-num text-white">${insideCount}</strong> of <strong class="mono-num">${N}</strong> points inside window.</span>
+                        </div>
+                        <div class="mono-num text-amber-300 font-bold text-sm">
+                            p̂<sub>B</sub>(${state.probeX.toFixed(2)}) = ${insideCount} &times; ${rectHeight.toFixed(3)} = ${pBox.toFixed(4)}
+                        </div>
+                    </div>
+                `;
+            } else if (state.kernelType === 'gaussian') {
+                probeBox.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <span class="text-sky-300 font-semibold">Gaussian Kernel Sum:</span>
+                            <span class="text-slate-300 ml-1">Every point <i class="math-serif">x<sub>i</sub></i> contributes proportional to <span class="mono-num">exp(&minus;(x&minus;x<sub>i</sub>)<sup>2</sup> / 2h<sup>2</sup>)</span>.</span>
+                        </div>
+                        <div class="mono-num text-sky-300 font-bold text-sm">
+                            p̂<sub>G</sub>(${state.probeX.toFixed(2)}) = ${pGauss.toFixed(4)}
+                        </div>
+                    </div>
+                `;
+            } else {
+                probeBox.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="mono-num text-sky-300 font-semibold">
+                            Gaussian p̂<sub>G</sub>(${state.probeX.toFixed(2)}) = <span class="text-white">${pGauss.toFixed(4)}</span>
+                        </div>
+                        <div class="mono-num text-amber-300 font-semibold">
+                            Boxcar p̂<sub>B</sub>(${state.probeX.toFixed(2)}) = <span class="text-white">${pBox.toFixed(4)}</span>
+                        </div>
+                        <div class="mono-num text-slate-400 text-[11px]">
+                            |&Delta;| = ${Math.abs(pGauss - pBox).toFixed(4)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Render per-point contribution cards
+            const contribContainer = document.getElementById('contributionsContainer');
+            contribContainer.innerHTML = '';
+
+            if (N === 0) {
+                document.getElementById('activeNeighborsCount').textContent = 'No data points';
+                return;
+            }
+
+            const evalType = state.kernelType === 'boxcar' ? 'boxcar' : 'gaussian';
+            const totalAtProbe = Math.max(1e-8, evaluateKDE(state.probeX, state.points, state.h, evalType));
+
+            const itemData = state.points.map((xi, idx) => {
+                const c = evaluateKernelContribution(state.probeX, xi, state.h, evalType, N);
+                const pct = (c / totalAtProbe) * 100;
+                return { idx, xi, c, pct };
+            });
+
+            const activeCount = itemData.filter(d => d.c > 1e-4).length;
+            document.getElementById('activeNeighborsCount').textContent =
+                `${activeCount}/${N} points contributing at x=${state.probeX.toFixed(2)}`;
+
+            itemData.forEach(d => {
+                const isStrong = d.c > 1e-3;
+                const card = document.createElement('div');
+                card.className = `px-2 py-1 rounded-lg border text-[10px] mono-num transition ${
+                    isStrong
+                        ? (evalType === 'boxcar' ? 'bg-amber-500/15 border-amber-500/40 text-amber-200' : 'bg-sky-500/15 border-sky-500/40 text-sky-200')
+                        : 'bg-slate-900/50 border-slate-800/70 text-slate-500'
+                }`;
+                card.innerHTML = `
+                    <div class="flex justify-between font-semibold">
+                        <span>x<sub>${d.idx + 1}</sub>=${d.xi.toFixed(1)}</span>
+                        <span>${d.c.toFixed(3)}</span>
+                    </div>
+                `;
+                contribContainer.appendChild(card);
+            });
+        }
+
+        function renderAll() {
+            renderMainCanvas();
+            renderLOOCVProfile();
+            updateInspectorAndMetrics();
+        }
+
+        /***********************************************************************
+         * 5. INTERACTION HANDLERS (CANVAS DRAGGING, ADDING, CONTROLS)
+         ***********************************************************************/
+        function getCanvasMousePos(evt) {
+            const rect = kdeCanvas.getBoundingClientRect();
+            const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+            const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+            return {
+                px: clientX - rect.left,
+                py: clientY - rect.top
+            };
+        }
+
+        function findNearestPointIndex(px, py) {
+            const baselineY = canvasGeom.height - canvasGeom.padB;
+            if (Math.abs(py - (baselineY + 8)) > 26) return -1;
+            let bestIdx = -1;
+            let bestDist = 16;
+            for (let i = 0; i < state.points.length; i++) {
+                const ptPx = xToPx(state.points[i]);
+                const dist = Math.abs(px - ptPx);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestIdx = i;
+                }
+            }
+            return bestIdx;
+        }
+
+        kdeCanvas.addEventListener('mousedown', (evt) => {
+            if (evt.button === 2) return; // handled by contextmenu
+            const { px, py } = getCanvasMousePos(evt);
+            const hitIdx = findNearestPointIndex(px, py);
+
+            if (state.interactionMode === 'remove') {
+                if (hitIdx !== -1) {
+                    state.points.splice(hitIdx, 1);
+                    state.hoveredPointIndex = -1;
+                    renderAll();
+                }
+                return;
+            }
+
+            if (hitIdx !== -1) {
+                state.draggingIndex = hitIdx;
+                kdeCanvas.style.cursor = 'grabbing';
+            } else if (px >= canvasGeom.padL && px <= canvasGeom.width - canvasGeom.padR) {
+                // Click on axis or plot: if near bottom axis, add a new data point; otherwise toggle/move probe
+                const baselineY = canvasGeom.height - canvasGeom.padB;
+                const clickedX = pxToX(px);
+                if (py >= baselineY - 30) {
+                    state.points.push(Number(clickedX.toFixed(2)));
+                    state.points.sort((a, b) => a - b);
+                    state.draggingIndex = state.points.indexOf(Number(clickedX.toFixed(2)));
+                } else {
+                    state.probeX = clickedX;
+                }
+                renderAll();
+            }
+        });
+
+        kdeCanvas.addEventListener('mousemove', (evt) => {
+            const { px, py } = getCanvasMousePos(evt);
+            if (state.draggingIndex !== -1) {
+                state.points[state.draggingIndex] = Number(pxToX(px).toFixed(2));
+                if (!state.probeLocked) {
+                    state.probeX = state.points[state.draggingIndex];
+                }
+                renderAll();
+                return;
+            }
+
+            const hitIdx = findNearestPointIndex(px, py);
+            state.hoveredPointIndex = hitIdx;
+
+            if (hitIdx !== -1) {
+                kdeCanvas.style.cursor = state.interactionMode === 'remove' ? 'pointer' : 'ew-resize';
+            } else {
+                const baselineY = canvasGeom.height - canvasGeom.padB;
+                kdeCanvas.style.cursor = py >= baselineY - 30 ? 'copy' : 'crosshair';
+            }
+
+            if (!state.probeLocked && px >= canvasGeom.padL && px <= canvasGeom.width - canvasGeom.padR) {
+                state.probeX = pxToX(px);
+            }
+            renderAll();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (state.draggingIndex !== -1) {
+                state.points.sort((a, b) => a - b);
+                state.draggingIndex = -1;
+                kdeCanvas.style.cursor = 'crosshair';
+                renderAll();
+            }
+        });
+
+        // Right-click on a point removes it immediately
+        kdeCanvas.addEventListener('contextmenu', (evt) => {
+            evt.preventDefault();
+            const { px, py } = getCanvasMousePos(evt);
+            const hitIdx = findNearestPointIndex(px, py);
+            if (hitIdx !== -1) {
+                state.points.splice(hitIdx, 1);
+                state.hoveredPointIndex = -1;
+                renderAll();
+            }
+        });
+
+        // Touch support for mobile/tablet
+        kdeCanvas.addEventListener('touchstart', (evt) => {
+            const { px, py } = getCanvasMousePos(evt);
+            const hitIdx = findNearestPointIndex(px, py);
+            if (hitIdx !== -1) {
+                state.draggingIndex = hitIdx;
+                evt.preventDefault();
+            } else if (px >= canvasGeom.padL && px <= canvasGeom.width - canvasGeom.padR) {
+                state.probeX = pxToX(px);
+                renderAll();
+            }
+        }, { passive: false });
+
+        kdeCanvas.addEventListener('touchmove', (evt) => {
+            const { px } = getCanvasMousePos(evt);
+            if (state.draggingIndex !== -1) {
+                state.points[state.draggingIndex] = Number(pxToX(px).toFixed(2));
+                state.probeX = state.points[state.draggingIndex];
+                evt.preventDefault();
+                renderAll();
+            } else if (!state.probeLocked) {
+                state.probeX = pxToX(px);
+                renderAll();
+            }
+        }, { passive: false });
+
+        // Click on LOOCV canvas to set bandwidth h directly
+        loocvCanvas.addEventListener('mousedown', (evt) => {
+            const rect = loocvCanvas.getBoundingClientRect();
+            const px = evt.clientX - rect.left;
+            const padL = 10, padR = 10;
+            const norm = Math.max(0, Math.min(1, (px - padL) / (rect.width - padL - padR)));
+            const newH = 0.08 + norm * (2.50 - 0.08);
+            setBandwidth(newH);
+        });
+
+        /***********************************************************************
+         * 6. UI CONTROLS, PRESETS, GENERATIVE SAMPLING & LESSONS
+         ***********************************************************************/
+        function setKernelType(type) {
+            state.kernelType = type;
+            document.querySelectorAll('.kernel-btn').forEach(btn => {
+                const isSelected = btn.dataset.kernel === type;
+                btn.className = isSelected
+                    ? 'kernel-btn px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
+                    : 'kernel-btn px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200';
+            });
+            renderAll();
+        }
+
+        function setBandwidth(hVal) {
+            state.h = Math.max(0.08, Math.min(2.50, Number(hVal)));
+            document.getElementById('bandwidthSlider').value = state.h;
+            renderAll();
+        }
+
+        function loadPreset(key) {
+            const preset = PRESETS[key];
+            if (!preset) return;
+            state.presetKey = key;
+            state.points = [...preset.points];
+            state.h = preset.defaultH;
+            state.sampleAnim = null;
+            document.getElementById('presetSelect').value = key;
+            document.getElementById('bandwidthSlider').value = state.h;
+            renderAll();
+        }
+
+        function syncControls() {
+            document.getElementById('toggleIndividualKernels').checked = state.showIndividual;
+            document.getElementById('toggleTrueDensity').checked = state.showTruePdf;
+            document.getElementById('toggleProbeLock').checked = state.probeLocked;
+            document.getElementById('toggleHistogram').checked = state.showHistogram;
+            renderAll();
+        }
+
+        // Kernel Type Buttons
+        document.querySelectorAll('.kernel-btn').forEach(btn => {
+            btn.addEventListener('click', () => setKernelType(btn.dataset.kernel));
+        });
+
+        // Bandwidth Slider & Quick Buttons
+        document.getElementById('bandwidthSlider').addEventListener('input', (e) => {
+            setBandwidth(parseFloat(e.target.value));
+        });
+
+        document.getElementById('btnUnderSmooth').addEventListener('click', () => setBandwidth(0.14));
+        document.getElementById('btnOverSmooth').addEventListener('click', () => setBandwidth(1.65));
+        document.getElementById('btnSilverman').addEventListener('click', () => {
+            const { silvermanH } = computeStats(state.points);
+            setBandwidth(silvermanH);
+        });
+        document.getElementById('btnLOOCVOpt').addEventListener('click', () => {
+            if (state.points.length < 2) return;
+            const activeType = state.kernelType === 'both' ? 'gaussian' : state.kernelType;
+            let bestH = state.h, bestScore = -Infinity;
+            for (let candH = 0.10; candH <= 2.40; candH += 0.02) {
+                const s = computeLOOCV(state.points, candH, activeType);
+                if (Number.isFinite(s) && s > bestScore) {
+                    bestScore = s;
+                    bestH = candH;
+                }
+            }
+            setBandwidth(bestH);
+        });
+
+        // Checkboxes
+        document.getElementById('toggleIndividualKernels').addEventListener('change', (e) => {
+            state.showIndividual = e.target.checked;
+            renderAll();
+        });
+        document.getElementById('toggleTrueDensity').addEventListener('change', (e) => {
+            state.showTruePdf = e.target.checked;
+            renderAll();
+        });
+        document.getElementById('toggleProbeLock').addEventListener('change', (e) => {
+            state.probeLocked = e.target.checked;
+            renderAll();
+        });
+        document.getElementById('toggleHistogram').addEventListener('change', (e) => {
+            state.showHistogram = e.target.checked;
+            renderAll();
+        });
+
+        // Preset Selector & Mode Buttons
+        document.getElementById('presetSelect').addEventListener('change', (e) => {
+            loadPreset(e.target.value);
+        });
+
+        document.getElementById('modeAddDrag').addEventListener('click', () => {
+            state.interactionMode = 'add_drag';
+            document.getElementById('modeAddDrag').className = 'px-2.5 py-1 rounded-lg font-medium bg-slate-800 text-slate-200 transition';
+            document.getElementById('modeRemove').className = 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-rose-300 transition';
+        });
+
+        document.getElementById('modeRemove').addEventListener('click', () => {
+            state.interactionMode = 'remove';
+            document.getElementById('modeRemove').className = 'px-2.5 py-1 rounded-lg font-medium bg-rose-500/20 text-rose-300 border border-rose-500/30 transition';
+            document.getElementById('modeAddDrag').className = 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-slate-200 transition';
+        });
+
+        document.getElementById('clearPointsBtn').addEventListener('click', () => {
+            loadPreset(state.presetKey);
+        });
+
+        // Generative Sampling Animation: x_new ~ p̂(x)
+        let sampleTimeout = null;
+        document.getElementById('sampleGenBtn').addEventListener('click', () => {
+            if (state.points.length === 0) return;
+            if (sampleTimeout) clearTimeout(sampleTimeout);
+
+            const N = state.points.length;
+            const chosenIdx = Math.floor(Math.random() * N);
+            const xi = state.points[chosenIdx];
+            const kType = state.kernelType === 'boxcar' ? 'boxcar' : 'gaussian';
+
+            // Sample noise from standard kernel K(u)
+            let eps = 0;
+            if (kType === 'boxcar') {
+                eps = (Math.random() * 2 - 1); // Uniform[-1, 1]
+            } else {
+                // Box-Muller transform for standard normal
+                const u1 = Math.max(1e-7, Math.random());
+                const u2 = Math.random();
+                eps = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+            }
+
+            const sampledX = Math.max(X_MIN + 0.15, Math.min(X_MAX - 0.15, xi + state.h * eps));
+            state.sampleAnim = {
+                selectedIndex: chosenIdx,
+                selectedX: xi,
+                sampledX: sampledX,
+                kernelType: kType
+            };
+            state.probeX = sampledX;
+
+            const toast = document.getElementById('sampleToast');
+            const toastDesc = document.getElementById('sampleToastDesc');
+            toast.classList.remove('hidden');
+            toastDesc.innerHTML = `
+                1. Picked uniform index <span class="mono-num text-white">i = ${chosenIdx + 1}</span> (<span class="mono-num text-emerald-300">x<sub>${chosenIdx + 1}</sub> = ${xi.toFixed(2)}</span>)<br>
+                2. Sampled kernel offset <span class="mono-num text-amber-300">h&middot;&epsilon; = ${(sampledX - xi).toFixed(2)}</span><br>
+                3. Generated <span class="mono-num font-bold text-yellow-300">x<sub>new</sub> = ${sampledX.toFixed(2)}</span>
+            `;
+
+            renderAll();
+
+            sampleTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+                state.sampleAnim = null;
+                renderAll();
+            }, 5500);
+        });
+
+        // Guided Lesson Curriculum Controller
+        function renderLesson(index) {
+            state.currentLesson = Math.max(0, Math.min(LESSONS.length - 1, index));
+            const lesson = LESSONS[state.currentLesson];
+
+            document.getElementById('lessonProgressText').textContent = `Lesson ${state.currentLesson + 1} of ${LESSONS.length}`;
+            document.getElementById('lessonContent').innerHTML = `
+                <div class="flex items-center justify-between">
+                    <h3 class="text-base font-bold text-white">${lesson.title}</h3>
+                </div>
+                ${lesson.html}
+            `;
+            document.getElementById('lessonExperimentText').textContent = lesson.experiment;
+
+            document.querySelectorAll('.lesson-tab').forEach((tab, idx) => {
+                tab.className = idx === state.currentLesson
+                    ? 'lesson-tab py-1.5 px-2 rounded-lg text-xs font-semibold transition bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                    : 'lesson-tab py-1.5 px-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-slate-200';
+            });
+
+            document.getElementById('prevLessonBtn').disabled = state.currentLesson === 0;
+            document.getElementById('nextLessonBtn').textContent =
+                state.currentLesson === LESSONS.length - 1 ? 'Restart Curriculum ↺' : 'Next Concept →';
+        }
+
+        document.querySelectorAll('.lesson-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const idx = parseInt(tab.dataset.lesson, 10);
+                renderLesson(idx);
+                LESSONS[idx].setup();
+            });
+        });
+
+        document.getElementById('applyLessonPresetBtn').addEventListener('click', () => {
+            LESSONS[state.currentLesson].setup();
+        });
+
+        document.getElementById('prevLessonBtn').addEventListener('click', () => {
+            if (state.currentLesson > 0) {
+                renderLesson(state.currentLesson - 1);
+                LESSONS[state.currentLesson].setup();
+            }
+        });
+
+        document.getElementById('nextLessonBtn').addEventListener('click', () => {
+            const nextIdx = (state.currentLesson + 1) % LESSONS.length;
+            renderLesson(nextIdx);
+            LESSONS[nextIdx].setup();
+        });
+
+        // Initialize on Window Load
+        window.addEventListener('resize', resizeCanvases);
+        window.onload = function () {
+            renderLesson(0);
+            resizeCanvases();
+        };
+    </script>
+</body>
+</html>
